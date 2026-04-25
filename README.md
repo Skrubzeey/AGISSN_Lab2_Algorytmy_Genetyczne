@@ -1,0 +1,2 @@
+# AGISSN_Lab2_Algorytmy_Genetyczne
+Aplikacja tworząca benchmarki dla różnych konfiguracji algorytmu genetycznego
