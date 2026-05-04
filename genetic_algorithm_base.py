@@ -1,6 +1,5 @@
 import numpy as np
 from abc import ABC, abstractmethod
-from utils import Encoding, RealEncoding, PermutationEncoding
 
 
 class BaseAG(ABC):
