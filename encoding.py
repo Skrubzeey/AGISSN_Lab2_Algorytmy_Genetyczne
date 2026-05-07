@@ -6,12 +6,12 @@ class Encoding:
         pass
 
     @staticmethod
-    def repair(self, individual):
+    def repair(individual):
         return individual
 
 
 class RealEncoding(Encoding):
-    def __int__(self, dimension, bounds):
+    def __init__(self, dimension, bounds):
         self.dimensions = dimension
         self.bounds = bounds
 
@@ -22,7 +22,7 @@ class RealEncoding(Encoding):
 
 
 class PermutationEncoding(Encoding):
-    def __int__(self, n):
+    def __init__(self, n):
         self.n = n
 
     def initialize(self, population_size):
