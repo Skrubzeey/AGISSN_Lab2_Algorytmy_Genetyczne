@@ -34,3 +34,18 @@ def generate_tsp_data(n_cities, seed=42):
     # Macierz odległości euklidesowych
     dist_matrix = np.sqrt(np.sum((coords[:, np.newaxis, :] - coords[np.newaxis, :, :]) ** 2, axis=-1))
     return coords, dist_matrix
+
+
+# zdefiniowanie funkcji przystosowania dla tsp
+def create_tsp_fitness(distance_matrix):
+    def fitness(route):
+        dist = 0
+
+        for i in range(len(route) - 1):
+            dist += distance_matrix[route[i], route[i + 1]]
+
+        dist += distance_matrix[route[-1], route[0]]
+
+        return dist
+
+    return fitness
