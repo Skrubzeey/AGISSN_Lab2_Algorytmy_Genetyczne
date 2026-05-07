@@ -23,8 +23,8 @@ def get_tsp_distance(path, distance_matrix):
     dist = 0
     for i in range(len(path) - 1):
         dist += distance_matrix[path[i], path[i + 1]]
-        dist += distance_matrix[path[-1], path[0]]  # powrót
-        return dist
+    dist += distance_matrix[path[-1], path[0]]  # powrót
+    return dist
 
 
 def generate_tsp_data(n_cities, seed=42):
