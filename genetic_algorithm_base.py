@@ -25,31 +25,62 @@ class BaseAG(ABC):
     def evaluate(self, population):
         return np.array([self.fitness_func(idx) for idx in population])
 
-    def run(self, generations):
+    def run(self, generations, patience=20):
+
         population = self.initialize_population()
+
         history = []
 
-        for _ in range(generations):
+        best_fitness = np.inf
+        no_improvement = 0
+
+        for generation in range(generations):
+
             fitness = self.evaluate(population)
+
+            current_best = np.min(fitness)
+
+            history.append(current_best)
+
+            # sprawdzanie poprawy
+            if current_best < best_fitness:
+
+                best_fitness = current_best
+                no_improvement = 0
+
+            else:
+                no_improvement += 1
+
+            # kryterium stopu stagnacji
+            if no_improvement >= patience:
+                print(f"Early stopping at generation {generation}")
+                break
 
             new_population = []
 
             while len(new_population) < self.population_size:
+
                 p1 = self.selection(population, fitness)
                 p2 = self.selection(population, fitness)
 
+                # crossover
                 if np.random.rand() < self.crossover_prob:
+
                     c1, c2 = self.crossover(p1, p2)
+
                 else:
+
                     c1, c2 = p1.copy(), p2.copy()
 
+                # mutation
                 c1 = self.mutation(c1)
                 c2 = self.mutation(c2)
 
                 new_population.extend([c1, c2])
 
-            population = np.array(new_population[:self.population_size])
-            history.append(np.min(fitness))
+            population = np.array(
+                new_population[:self.population_size]
+            )
 
         return population, history
 
