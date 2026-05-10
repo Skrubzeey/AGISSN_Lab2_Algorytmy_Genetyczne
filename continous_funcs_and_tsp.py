@@ -49,3 +49,33 @@ def create_tsp_fitness(distance_matrix):
         return dist
 
     return fitness
+
+
+def nearest_neighbor_route(distance_matrix):
+
+    n = len(distance_matrix)
+
+    start = np.random.randint(n)
+
+    route = [start]
+
+    unvisited = set(range(n))
+    unvisited.remove(start)
+
+    current = start
+
+    while unvisited:
+
+        next_city = min(
+            unvisited,
+            key=lambda city:
+                distance_matrix[current][city]
+        )
+
+        route.append(next_city)
+
+        unvisited.remove(next_city)
+
+        current = next_city
+
+    return np.array(route)
