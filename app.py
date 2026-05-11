@@ -459,12 +459,53 @@ st.markdown(
 # =====================================================
 st.subheader("📋 Current Configuration")
 
-col1, col2, col3, col4 = st.columns(4)
+config_col1, config_col2, config_col3 = st.columns(3)
 
-col1.metric("Problem", problem_type)
-col2.metric("Population", population_size)
-col3.metric("Generations", num_generations)
-col4.metric("Runs", n_runs)
+with config_col1:
+
+    st.markdown("### 🧩 Problem Configuration")
+
+    st.write(f"**Problem Type:** {problem_type}")
+
+    if problem_type == "Continuous":
+
+        st.write(f"**Objective Function:** {function_name}")
+        st.write(f"**Dimensions:** {dimensions}")
+        st.write(f"**Bounds:** {bounds}")
+
+    else:
+
+        st.write(f"**Number of Cities:** {n_cities}")
+
+
+with config_col2:
+
+    st.markdown("### 🧬 Genetic Algorithm")
+
+    st.write(f"**Population Size:** {population_size}")
+    st.write(f"**Generations:** {num_generations}")
+    st.write(f"**Crossover Probability (Pc):** {pc}")
+    st.write(f"**Mutation Probability (Pm):** {pm}")
+    st.write(f"**Patience:** {patience}")
+    st.write(f"**Runs:** {n_runs}")
+
+
+with config_col3:
+
+    st.markdown("### ⚙ Operators")
+
+    st.write(f"**Selection:** {selection_name}")
+
+    if selection_name == "Tournament":
+        st.write(f"**Tournament Size:** {tournament_size}")
+
+    st.write(f"**Crossover:** {crossover_name}")
+    st.write(f"**Mutation:** {mutation_name}")
+
+    if problem_type == "Continuous":
+        st.write("**Encoding:** Real Encoding")
+    else:
+        st.write("**Encoding:** Permutation Encoding")
 
 
 # =====================================================
