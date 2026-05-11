@@ -2,13 +2,724 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import time
 
-import continous_funcs_and_tsp as f
-import crossover as cr
-import encoding as en
-import genetic_algorithm_base as gen
-import mutation as mu
-import selection_types as sel
+from genetic_algorithm_base import BaseAG
+
+from continous_funcs_and_tsp import (
+    sphere_function,
+    rosenbrock_function,
+    rastrigin_function,
+    ackley_function,
+    generate_tsp_data,
+    create_tsp_fitness
+)
+
+from selection_types import (
+    tournament_selection,
+    roulette_selection,
+    ranking_selection
+)
+
+from mutation import (
+    gaussian_mutation,
+    uniform_mutation,
+    swap_mutation,
+    inverse_mutation
+)
+
+from crossover import (
+    one_point_crossover,
+    two_point_crossover,
+    arithmetic_crossover,
+    order_crossover
+)
+
+from encoding import (
+    RealEncoding,
+    PermutationEncoding
+)
 
 
+# =====================================================
+# STREAMLIT CONFIG
+# =====================================================
+st.set_page_config(
+    page_title="Genetic Algorithm Laboratory",
+    layout="wide"
+)
 
+
+# =====================================================
+# SESSION STATE
+# =====================================================
+if "results" not in st.session_state:
+    st.session_state.results = None
+
+
+# =====================================================
+# HELPER FUNCTIONS
+# =====================================================
+def plot_convergence(history):
+    fig, ax = plt.subplots()
+
+    ax.plot(history)
+
+    ax.set_title("Convergence Plot")
+    ax.set_xlabel("Generation")
+    ax.set_ylabel("Best Fitness")
+
+    return fig
+
+
+# =====================================================
+def plot_histogram(scores):
+    fig, ax = plt.subplots()
+
+    ax.hist(scores, bins=10)
+
+    ax.set_title("Histogram of Results")
+    ax.set_xlabel("Fitness")
+    ax.set_ylabel("Frequency")
+
+    return fig
+
+
+# =====================================================
+def plot_boxplot(scores):
+    fig, ax = plt.subplots()
+
+    ax.boxplot(scores)
+
+    ax.set_title("Boxplot of Results")
+
+    return fig
+
+
+# =====================================================
+def plot_tsp(coords, route):
+    fig, ax = plt.subplots()
+
+    ax.scatter(coords[:, 0], coords[:, 1], c="red")
+
+    for i in range(len(route) - 1):
+        p1 = route[i]
+        p2 = route[i + 1]
+
+        ax.plot(
+            [coords[p1, 0], coords[p2, 0]],
+            [coords[p1, 1], coords[p2, 1]],
+            "b-"
+        )
+
+    p1 = route[-1]
+    p2 = route[0]
+
+    ax.plot(
+        [coords[p1, 0], coords[p2, 0]],
+        [coords[p1, 1], coords[p2, 1]],
+        "b-"
+    )
+
+    ax.set_title("Best TSP Route")
+
+    return fig
+
+
+# =====================================================
+def plot_contour(func, bounds, best_individual=None):
+    x = np.linspace(bounds[0], bounds[1], 100)
+    y = np.linspace(bounds[0], bounds[1], 100)
+
+    X, Y = np.meshgrid(x, y)
+
+    Z = np.array([
+        func(np.array([xi, yi]))
+        for xi, yi in zip(X.flatten(), Y.flatten())
+    ])
+
+    Z = Z.reshape(X.shape)
+
+    fig, ax = plt.subplots()
+
+    contour = ax.contourf(X, Y, Z, levels=50)
+
+    plt.colorbar(contour)
+
+    if best_individual is not None:
+        ax.scatter(
+            best_individual[0],
+            best_individual[1],
+            color="red",
+            s=100,
+            label="Best"
+        )
+
+        ax.legend()
+
+    ax.set_title("Contour Plot")
+
+    return fig
+
+
+# =====================================================
+# SIDEBAR
+# =====================================================
+st.sidebar.title("⚙ Genetic Algorithm Laboratory")
+
+
+# =====================================================
+# PROBLEM TYPE
+# =====================================================
+problem_type = st.sidebar.selectbox(
+    "Problem Type",
+    ["Continuous", "TSP"]
+)
+
+
+# =====================================================
+# PROBLEM CONFIGURATION
+# =====================================================
+FUNCTIONS = {
+    "Sphere": {
+        "func": sphere_function,
+        "bounds": (-5, 5)
+    },
+
+    "Rosenbrock": {
+        "func": rosenbrock_function,
+        "bounds": (-5, 10)
+    },
+
+    "Rastrigin": {
+        "func": rastrigin_function,
+        "bounds": (-5.12, 5.12)
+    },
+
+    "Ackley": {
+        "func": ackley_function,
+        "bounds": (-32, 32)
+    }
+}
+
+
+# =====================================================
+# CONTINUOUS PROBLEM
+# =====================================================
+if problem_type == "Continuous":
+
+    function_name = st.sidebar.selectbox(
+        "Objective Function",
+        list(FUNCTIONS.keys())
+    )
+
+    dimensions = st.sidebar.selectbox(
+        "Dimensions",
+        [2, 5, 10]
+    )
+
+    objective_function = FUNCTIONS[function_name]["func"]
+
+    bounds = FUNCTIONS[function_name]["bounds"]
+
+    encoding = RealEncoding(
+        dimension=dimensions,
+        bounds=bounds
+    )
+
+
+# =====================================================
+# TSP PROBLEM
+# =====================================================
+else:
+
+    n_cities = st.sidebar.selectbox(
+        "Number of Cities",
+        [10, 20, 50]
+    )
+
+    coords, dist_matrix = generate_tsp_data(
+        n_cities
+    )
+
+    objective_function = create_tsp_fitness(
+        dist_matrix
+    )
+
+    encoding = PermutationEncoding(
+        n=n_cities
+    )
+
+
+# =====================================================
+# GA PARAMETERS
+# =====================================================
+st.sidebar.subheader("Genetic Algorithm Parameters")
+
+population_size = st.sidebar.selectbox(
+    "Population Size",
+    [10, 20, 50, 100],
+    index=2
+)
+
+num_generations = st.sidebar.slider(
+    "Generations",
+    10,
+    500,
+    100
+)
+
+pc = st.sidebar.selectbox(
+    "Crossover Probability (Pc)",
+    [0.6, 0.8, 1.0],
+    index=1
+)
+
+pm = st.sidebar.selectbox(
+    "Mutation Probability (Pm)",
+    [0.01, 0.05, 0.1],
+    index=1
+)
+
+patience = st.sidebar.slider(
+    "Patience",
+    5,
+    100,
+    20
+)
+
+n_runs = st.sidebar.slider(
+    "Number of Runs",
+    1,
+    50,
+    20
+)
+
+
+# =====================================================
+# SELECTION METHODS
+# =====================================================
+selection_name = st.sidebar.selectbox(
+    "Selection Method",
+    [
+        "Tournament",
+        "Roulette",
+        "Ranking"
+    ]
+)
+
+
+# =====================================================
+# TOURNAMENT PARAMETER
+# =====================================================
+tournament_size = 3
+
+if selection_name == "Tournament":
+
+    tournament_size = st.sidebar.slider(
+        "Tournament Size",
+        2,
+        10,
+        3
+    )
+
+
+# =====================================================
+# CROSSOVER METHODS
+# =====================================================
+if problem_type == "Continuous":
+
+    crossover_name = st.sidebar.selectbox(
+        "Crossover Method",
+        [
+            "One Point",
+            "Two Point",
+            "Arithmetic"
+        ]
+    )
+
+else:
+
+    crossover_name = st.sidebar.selectbox(
+        "Crossover Method",
+        [
+            "OX"
+        ]
+    )
+
+
+# =====================================================
+# MUTATION METHODS
+# =====================================================
+if problem_type == "Continuous":
+
+    mutation_name = st.sidebar.selectbox(
+        "Mutation Method",
+        [
+            "Gaussian",
+            "Uniform"
+        ]
+    )
+
+else:
+
+    mutation_name = st.sidebar.selectbox(
+        "Mutation Method",
+        [
+            "Swap",
+            "Inverse"
+        ]
+    )
+
+
+# =====================================================
+# STRATEGY MAPS
+# =====================================================
+selection_map = {
+
+    "Tournament": lambda pop, fit:
+        tournament_selection(
+            pop,
+            fit,
+            tournament_size=tournament_size
+        ),
+
+    "Roulette": roulette_selection,
+
+    "Ranking": ranking_selection
+}
+
+
+# =====================================================
+if problem_type == "Continuous":
+
+    crossover_map = {
+        "One Point": one_point_crossover,
+        "Two Point": two_point_crossover,
+        "Arithmetic": arithmetic_crossover
+    }
+
+else:
+
+    crossover_map = {
+        "OX": order_crossover
+    }
+
+
+# =====================================================
+if problem_type == "Continuous":
+
+    mutation_map = {
+
+        "Gaussian": lambda ind:
+            gaussian_mutation(
+                ind,
+                mutation_prob=pm,
+                bounds=bounds
+            ),
+
+        "Uniform": lambda ind:
+            uniform_mutation(
+                ind,
+                mutation_prob=pm,
+                bounds=bounds
+            )
+    }
+
+else:
+
+    mutation_map = {
+
+        "Swap": lambda ind:
+            swap_mutation(
+                ind,
+                mutation_prob=pm
+            ),
+
+        "Inverse": lambda ind:
+            inverse_mutation(
+                ind,
+                mutation_prob=pm
+            )
+    }
+
+
+# =====================================================
+# MAIN PAGE
+# =====================================================
+st.title("🧬 Genetic Algorithm Benchmark Laboratory")
+
+st.markdown(
+    "Interactive environment for benchmarking genetic algorithms."
+)
+
+
+# =====================================================
+# CURRENT CONFIGURATION
+# =====================================================
+st.subheader("📋 Current Configuration")
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric("Problem", problem_type)
+col2.metric("Population", population_size)
+col3.metric("Generations", num_generations)
+col4.metric("Runs", n_runs)
+
+
+# =====================================================
+# RUN BUTTON
+# =====================================================
+if st.button(
+    "🚀 RUN BENCHMARK",
+    use_container_width=True
+):
+
+    all_scores = []
+
+    best_global_individual = None
+    best_global_fitness = np.inf
+
+    final_history = []
+
+    progress_bar = st.progress(0)
+
+    start_time = time.time()
+
+    # =================================================
+    # BENCHMARK LOOP
+    # =================================================
+    for run in range(n_runs):
+
+        ga = BaseAG(
+
+            population_size=population_size,
+
+            fitness_func=objective_function,
+
+            crossover_prob=pc,
+            mutation_prob=pm,
+
+            selection_method=selection_map[
+                selection_name
+            ],
+
+            crossover_method=crossover_map[
+                crossover_name
+            ],
+
+            mutation_method=mutation_map[
+                mutation_name
+            ],
+
+            encoding=encoding
+        )
+
+        best_individual, best_fitness, history = ga.run(
+            generations=num_generations,
+            patience=patience
+        )
+
+        all_scores.append(best_fitness)
+
+        if best_fitness < best_global_fitness:
+            best_global_fitness = best_fitness
+            best_global_individual = best_individual
+            final_history = history
+
+        progress_bar.progress(
+            (run + 1) / n_runs
+        )
+
+    total_time = time.time() - start_time
+
+
+    # =================================================
+    # STATISTICS
+    # =================================================
+    stats_df = pd.DataFrame({
+
+        "Metric": [
+            "Mean",
+            "Std",
+            "Best",
+            "Worst",
+            "Execution Time (s)"
+        ],
+
+        "Value": [
+            np.mean(all_scores),
+            np.std(all_scores),
+            np.min(all_scores),
+            np.max(all_scores),
+            round(total_time, 2)
+        ]
+    })
+
+
+    # =================================================
+    # PLOTS
+    # =================================================
+    convergence_fig = plot_convergence(
+        final_history
+    )
+
+    histogram_fig = plot_histogram(
+        all_scores
+    )
+
+    boxplot_fig = plot_boxplot(
+        all_scores
+    )
+
+    contour_fig = None
+    tsp_fig = None
+
+    if problem_type == "Continuous":
+
+        if dimensions == 2:
+
+            contour_fig = plot_contour(
+                objective_function,
+                bounds,
+                best_global_individual
+            )
+
+    else:
+
+        tsp_fig = plot_tsp(
+            coords,
+            best_global_individual
+        )
+
+
+    # =================================================
+    # SAVE RESULTS
+    # =================================================
+    st.session_state.results = {
+
+        "stats": stats_df,
+
+        "convergence_fig": convergence_fig,
+
+        "histogram_fig": histogram_fig,
+
+        "boxplot_fig": boxplot_fig,
+
+        "contour_fig": contour_fig,
+
+        "tsp_fig": tsp_fig,
+
+        "best_fitness": best_global_fitness,
+
+        "best_individual": best_global_individual,
+
+        "scores": all_scores
+    }
+
+    st.rerun()
+
+
+# =====================================================
+# RESULTS SECTION
+# =====================================================
+if st.session_state.results is not None:
+
+    st.divider()
+
+    st.header("📊 Benchmark Results")
+
+    results = st.session_state.results
+
+
+    # =================================================
+    # STATISTICS
+    # =================================================
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+
+        st.subheader("Convergence Plot")
+
+        st.pyplot(
+            results["convergence_fig"]
+        )
+
+    with col2:
+
+        st.subheader("Statistics")
+
+        st.table(
+            results["stats"]
+        )
+
+
+    # =================================================
+    # HISTOGRAM + BOXPLOT
+    # =================================================
+    col3, col4 = st.columns(2)
+
+    with col3:
+
+        st.subheader("Histogram")
+
+        st.pyplot(
+            results["histogram_fig"]
+        )
+
+    with col4:
+
+        st.subheader("Boxplot")
+
+        st.pyplot(
+            results["boxplot_fig"]
+        )
+
+
+    # =================================================
+    # CONTOUR
+    # =================================================
+    if results["contour_fig"] is not None:
+
+        st.subheader("Contour Plot")
+
+        st.pyplot(
+            results["contour_fig"]
+        )
+
+
+    # =================================================
+    # TSP
+    # =================================================
+    if results["tsp_fig"] is not None:
+
+        st.subheader("TSP Visualization")
+
+        st.pyplot(
+            results["tsp_fig"]
+        )
+
+
+    # =================================================
+    # DOWNLOADS
+    # =================================================
+    st.divider()
+
+    st.subheader("📥 Export Results")
+
+    csv_data = results["stats"].to_csv(
+        index=False
+    ).encode("utf-8")
+
+    st.download_button(
+        label="Download CSV",
+        data=csv_data,
+        file_name="ga_results.csv",
+        mime="text/csv"
+    )
+
+else:
+
+    st.info(
+        "Configure experiment and run benchmark."
+    )
